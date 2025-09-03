@@ -7,7 +7,7 @@ import numpy as np
 import xarray as xr
 from sklearn.neighbors import KDTree
 
-def pixc2raster(pixc_var, pixc_lonlat, raster_extent, resolution):
+def pixc2raster(pixc_var, pixc_lonlat, raster_extent, resolution, agg_method = 'median'):
     """
     des: convert pixc data to raster format, using the median height of neighbors.
     params:
@@ -15,6 +15,7 @@ def pixc2raster(pixc_var, pixc_lonlat, raster_extent, resolution):
         pixc_lonlat: tuple/list of two numpy arrays (longitude, latitude) of the pixc data.
         raster_extent: tuple/list, raster data extent (min_lon, max_lon, min_lat, max_lat).
         resolution: int or list/tuple (lon_resolution, lat_resolution).
+        agg_method: str, aggregation method ('mean' or 'median').
     returns: xarray DataArray in raster format.
     """
     if isinstance(resolution, int) or isinstance(resolution, float):
@@ -37,17 +38,19 @@ def pixc2raster(pixc_var, pixc_lonlat, raster_extent, resolution):
     pixc_var_neighbors = [pixc_var[id_list] for id_list in ids]
     pixc_var_neighbors = [np.nan if neighbors.size==0 else neighbors 
                                             for neighbors in pixc_var_neighbors]
-    var_neighbors_median_grid = []
-    for i, neighbors in enumerate(pixc_var_neighbors):
-        if np.isnan(neighbors).all():
-            var_neighbors_median_grid.append(np.nan)
-        else:
-            var_neighbors_median_grid.append(np.nanmedian(neighbors))
-    var_neighbors_median_grid = np.array(var_neighbors_median_grid).reshape(lats_grid.shape)
+    if agg_method == 'median':
+        var_neighbors_agg_grid = [np.nanmedian(neighbors) if not np.isnan(neighbors).all() else np.nan
+                                   for neighbors in pixc_var_neighbors]
+    elif agg_method == 'mean':
+        var_neighbors_agg_grid = [np.nanmean(neighbors) if not np.isnan(neighbors).all() else np.nan
+                                   for neighbors in pixc_var_neighbors]
+    else:
+        raise ValueError("agg_method should be 'mean' or 'median'")
+    var_neighbors_agg_grid = np.array(var_neighbors_agg_grid).reshape(lats_grid.shape)
 
     ### Create the DataArray
     coords = {'x': xs_linspace, 'y': ys_linspace}
-    raster_da = xr.DataArray(var_neighbors_median_grid, 
+    raster_da = xr.DataArray(var_neighbors_agg_grid, 
                                 coords=coords, 
                                 dims=['y', 'x'])
 
